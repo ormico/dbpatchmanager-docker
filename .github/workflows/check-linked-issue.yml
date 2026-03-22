@@ -1,0 +1,45 @@
+name: Require Linked Issue
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  check-linked-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for linked issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LINKED=$(gh api graphql -f query='
+            query($owner:String!, $repo:String!, $number:Int!) {
+              repository(owner:$owner, name:$repo) {
+                pullRequest(number:$number) {
+                  closingIssuesReferences(first:1) {
+                    totalCount
+                  }
+                }
+              }
+            }' \
+            -f owner="${{ github.repository_owner }}" \
+            -f repo="${{ github.event.repository.name }}" \
+            -F number=${{ github.event.pull_request.number }} \
+            --jq '.data.repository.pullRequest.closingIssuesReferences.totalCount') \
+            || { echo "::error::GitHub API query failed"; exit 1; }
+
+          if ! [ "$LINKED" -eq "$LINKED" ] 2>/dev/null; then
+            echo "::error::Unexpected API response: '$LINKED'"
+            exit 1
+          fi
+
+          if [ "$LINKED" -eq 0 ]; then
+            echo "::error::This PR has no linked issues. Add 'Closes #N' to the PR description."
+            exit 1
+          fi
+          echo "Found $LINKED linked issue(s)."
