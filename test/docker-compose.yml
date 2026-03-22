@@ -1,0 +1,34 @@
+# Local development / manual testing
+# Usage: docker compose -f test/docker-compose.yml up --build
+services:
+  ci:
+    build:
+      context: ..
+      dockerfile: v2/Dockerfile
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: dbpatch
+      MYSQL_PWD: dbpatch123
+      MYSQL_DB: testdb
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ../test:/workspace/test
+    command: /workspace/test/smoke-test.sh
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: dbpatch
+      MYSQL_PASSWORD: dbpatch123
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
