@@ -39,6 +39,7 @@ One image per dbpatch major version. Each image contains all three database driv
 - **Separate images per major version, not combined.** Each image carries only the .NET runtime it needs. Consumer workflows explicitly choose which dbpatch version to test against. Clean lifecycle — stop building v2 when v2 is retired.
 - **One image per major version, not per database platform.** ODBC drivers are small (~5-10MB each). All three fit in one image.
 - **Ubuntu 24.04 base.** Familiar, well-supported, long-term support.
+- **.NET 6.0 is EOL** (November 2024) but remains the minimum runtime for dbpatch v2 (.NET 5.0 apps forward-roll to 6.0). The v2 image will be retired when dbpatch v2 is fully deprecated.
 
 ---
 
@@ -62,6 +63,8 @@ One image per dbpatch major version. Each image contains all three database driv
 
 **Not included:** database servers, test data, scripts, source code.
 
+**Note:** MySQL Connector/ODBC is not available via Ubuntu's default apt repos. It must be installed from a `.deb` downloaded from dev.mysql.com. The exact URL and version need to be verified at implementation time. The `.so` paths in `odbcinst.ini` must also be verified against the installed package.
+
 ### DBPatch Install Layout
 
 ```
@@ -77,6 +80,8 @@ GitHub API lists all releases. jq filters by `v2.*` tag prefix to avoid pulling 
 curl -fsSL https://api.github.com/repos/ormico/dbpatchmanager/releases \
   | jq -r '[.[] | select(.tag_name | startswith("v2."))][0].assets[] | select(.name == "dbpatch.zip") | .browser_download_url'
 ```
+
+The GitHub API call is unauthenticated (60 requests/hour rate limit). For CI environments with frequent builds, consider passing a `GITHUB_TOKEN` build arg to increase the limit.
 
 ### ODBC Driver Configuration
 
@@ -113,11 +118,13 @@ dbpatchmanager-docker/
 
 ### Build Context Note
 
-Docker `COPY` cannot reference parent directories. Both Dockerfiles reference `../shared/odbcinst.ini`, so builds must use the repo root as build context:
+Docker `COPY` paths are relative to the build context, not the Dockerfile location. Since builds use the repo root as context, the COPY instruction must use `shared/odbcinst.ini` (not `../shared/odbcinst.ini`):
 
 ```bash
 docker build -f v2/Dockerfile .
 ```
+
+Inside the Dockerfile: `COPY shared/odbcinst.ini /etc/odbcinst.ini`
 
 ---
 
@@ -167,7 +174,7 @@ GitVersion with ContinuousDelivery mode. Already configured in `GitVersion.yml`.
 ### scheduled-rebuild.yml — Monthly Rebuild
 
 - **Trigger:** Cron `0 6 1 * *` (1st of month, 6 AM UTC) + manual dispatch
-- **Action:** Rebuild and push `latest` tag only
+- **Action:** Rebuild, smoke test, and push `latest` tag only
 - **Purpose:** Pick up Ubuntu security patches and new dbpatch minor/patch releases
 
 ---
