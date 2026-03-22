@@ -48,21 +48,26 @@ if [ -n "${MYSQL_HOST:-}" ]; then
     check "MySQL TCP connection" mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" -e "SELECT 1;"
 
     # Create table, insert, select
-    mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" <<-SQL
+    if mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" <<-SQL
         CREATE TABLE IF NOT EXISTS smoke_test (id INT PRIMARY KEY, name VARCHAR(50));
         INSERT INTO smoke_test (id, name) VALUES (1, 'smoke') ON DUPLICATE KEY UPDATE name='smoke';
 SQL
-    RESULT=$(mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" -N -e "SELECT name FROM smoke_test WHERE id=1;")
-    if [ "$RESULT" = "smoke" ]; then
-        echo "PASS: MySQL insert and select"
-        PASS=$((PASS + 1))
+    then
+        RESULT=$(mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" -N -e "SELECT name FROM smoke_test WHERE id=1;")
+        if [ "$RESULT" = "smoke" ]; then
+            echo "PASS: MySQL insert and select"
+            PASS=$((PASS + 1))
+        else
+            echo "FAIL: MySQL insert and select (got: $RESULT)"
+            FAIL=$((FAIL + 1))
+        fi
     else
-        echo "FAIL: MySQL insert and select (got: $RESULT)"
+        echo "FAIL: MySQL insert and select (setup failed)"
         FAIL=$((FAIL + 1))
     fi
 
-    # Cleanup
-    mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" -e "DROP TABLE IF EXISTS smoke_test;"
+    # Cleanup (best-effort)
+    mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" -e "DROP TABLE IF EXISTS smoke_test;" || true
 else
     echo "SKIP: MySQL connectivity (MYSQL_HOST not set)"
 fi

@@ -1,5 +1,5 @@
 # dbpatchmanager-ci-v2 — CI runner image for DBPatch v2 pipelines
-# Contains: .NET 6.0 runtime, ODBC drivers, CLI tools, dbpatch v2 binary
+# Contains: .NET 8.0 runtime, ODBC drivers, CLI tools, dbpatch v2 binary
 # Does NOT contain: database servers (use service containers)
 #
 # Build from repo root: docker build -f v2/Dockerfile .
@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # After install, verify .so path matches shared/odbcinst.ini:
 #   find / -name 'libmyodbc*' 2>/dev/null
 RUN curl -fsSL https://dev.mysql.com/get/Downloads/Connector-ODBC/9.6/mysql-connector-odbc_9.6.0-1ubuntu24.04_amd64.deb -o mysql-odbc.deb \
-    && (dpkg -i mysql-odbc.deb || apt-get install -f -y) \
+    && (dpkg -i mysql-odbc.deb || (apt-get update && apt-get install -f -y)) \
     && rm mysql-odbc.deb
 
 # --- MySQL CLI tools ---
@@ -80,6 +80,7 @@ COPY shared/odbcinst.ini /etc/odbcinst.ini
 # Install layout matches install-dbpatch.sh from the dbpatchmanager repo.
 RUN DOWNLOAD_URL=$(curl -fsSL https://api.github.com/repos/ormico/dbpatchmanager/releases \
         | jq -r '[.[] | select(.tag_name | startswith("v2."))][0].assets[] | select(.name == "dbpatch.zip") | .browser_download_url') \
+    && if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then echo "ERROR: Could not find dbpatch v2 download URL" && exit 1; fi \
     && echo "Downloading dbpatch v2 from: $DOWNLOAD_URL" \
     && mkdir -p /usr/local/lib/dbpatch \
     && curl -fsSL "$DOWNLOAD_URL" -o /usr/local/lib/dbpatch/dbpatch.zip \

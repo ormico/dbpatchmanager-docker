@@ -7,7 +7,7 @@ Pre-built CI container images for [DBPatch](https://github.com/ormico/dbpatchman
 | Component | Version |
 |---|---|
 | Ubuntu | 24.04 |
-| .NET Runtime | 6.0 |
+| .NET Runtime | 8.0 |
 | PowerShell | 7+ |
 | MySQL ODBC | Connector/ODBC 9.x |
 | MySQL CLI | mysql, mysqldump |
@@ -62,7 +62,7 @@ Image version tags track changes to the image itself (driver updates, base OS), 
 
 | Image | DBPatch | .NET |
 |---|---|---|
-| `ghcr.io/ormico/dbpatchmanager-ci-v2` | Latest v2.x.x | 6.0 |
+| `ghcr.io/ormico/dbpatchmanager-ci-v2` | Latest v2.x.x | 8.0 |
 | `ghcr.io/ormico/dbpatchmanager-ci-v3` | Latest v3.x.x | 10 (future) |
 
 ## Local Development
