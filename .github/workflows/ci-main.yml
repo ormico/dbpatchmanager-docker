@@ -2,7 +2,8 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -11,24 +12,52 @@ permissions:
 
 jobs:
   version:
+    name: Calculate Version
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     outputs:
-      semver: ${{ steps.parse.outputs.semver }}
-      major: ${{ steps.parse.outputs.major }}
-      minor: ${{ steps.parse.outputs.minor }}
+      semVer: ${{ steps.gitversion.outputs.semVer }}
+      majorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}
+      major: ${{ steps.gitversion.outputs.major }}
+      minor: ${{ steps.gitversion.outputs.minor }}
+      fullSemVer: ${{ steps.gitversion.outputs.fullSemVer }}
+
     steps:
-      - name: Parse version from tag
-        id: parse
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag is on main branch
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          SEMVER="${TAG#v}"
-          MAJOR="${SEMVER%%.*}"
-          MINOR="${SEMVER#*.}"
-          MINOR="${MINOR%%.*}"
-          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
-          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
-          echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
-          echo "Version: $SEMVER (major=$MAJOR, minor=$MINOR)"
+          TAG_COMMIT=$(git rev-list -n 1 $GITHUB_REF)
+          echo "Tag points to commit: $TAG_COMMIT"
+
+          if git merge-base --is-ancestor $TAG_COMMIT origin/main; then
+            echo "[OK] Tag is on main branch"
+          else
+            echo "[ERROR] Tag $GITHUB_REF_NAME is not on main branch"
+            echo "Please only create release tags from the main branch"
+            exit 1
+          fi
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v1
+        with:
+          versionSpec: '5.x'
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v1
+        with:
+          useConfigFile: true
+          configFilePath: GitVersion.yml
+
+      - name: Display Version
+        run: |
+          echo "SemVer: ${{ steps.gitversion.outputs.semVer }}"
+          echo "MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
+          echo "FullSemVer: ${{ steps.gitversion.outputs.fullSemVer }}"
 
   build-and-push:
     needs: version
@@ -63,7 +92,7 @@ jobs:
       - name: Build image
         run: |
           docker build -f v2/Dockerfile \
-            -t ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semver }} \
+            -t ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }} \
             -t ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }} \
             -t ghcr.io/ormico/dbpatchmanager-ci-v2:latest \
             .
@@ -78,12 +107,12 @@ jobs:
             -e MYSQL_PWD=dbpatch123 \
             -e MYSQL_DB=testdb \
             -v "${{ github.workspace }}/test:/workspace/test" \
-            ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semver }} \
+            ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }} \
             /workspace/test/smoke-test.sh
 
       - name: Push to GHCR
         run: |
-          docker push ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semver }}
+          docker push ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }}
           docker push ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
           docker push ghcr.io/ormico/dbpatchmanager-ci-v2:latest
 
@@ -97,5 +126,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          name: Release v${{ needs.version.outputs.majorMinorPatch }}
           generate_release_notes: true
