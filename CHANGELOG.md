@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.0.0] 2026-03-22
 
 ### Added
 - v2 Docker image with Ubuntu 24.04, .NET 8.0, ODBC drivers (MySQL, PostgreSQL, SQL Server), CLI tools, PowerShell, dbpatch v2
