@@ -47,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # After install, verify .so path matches shared/odbcinst.ini:
 #   find / -name 'libmyodbc*' 2>/dev/null
 RUN curl -fsSL https://dev.mysql.com/get/Downloads/Connector-ODBC/9.6/mysql-connector-odbc_9.6.0-1ubuntu24.04_amd64.deb -o mysql-odbc.deb \
-    && dpkg -i mysql-odbc.deb || apt-get install -f -y \
+    && (dpkg -i mysql-odbc.deb || apt-get install -f -y) \
     && rm mysql-odbc.deb
 
 # --- MySQL CLI tools ---

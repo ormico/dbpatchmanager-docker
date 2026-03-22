@@ -11,10 +11,10 @@ check() {
     shift
     if "$@" > /dev/null 2>&1; then
         echo "PASS: $label"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo "FAIL: $label"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
@@ -55,10 +55,10 @@ SQL
     RESULT=$(mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" -N -e "SELECT name FROM smoke_test WHERE id=1;")
     if [ "$RESULT" = "smoke" ]; then
         echo "PASS: MySQL insert and select"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo "FAIL: MySQL insert and select (got: $RESULT)"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 
     # Cleanup
