@@ -167,9 +167,10 @@ GitVersion with ContinuousDelivery mode. Already configured in `GitVersion.yml`.
 - **Trigger:** Tag push (`v*`) or manual dispatch
 - **Jobs:**
   1. GitVersion calculates semver, verifies tag is on `main`
-  2. Build image, push to GHCR with version + latest tags
-  3. Smoke test against the published image
-  4. Create GitHub Release
+  2. Build image with version + latest tags
+  3. Smoke test against the locally-built image (pre-push to avoid publishing broken images)
+  4. Push to GHCR
+  5. Create GitHub Release
 
 ### scheduled-rebuild.yml — Monthly Rebuild
 
