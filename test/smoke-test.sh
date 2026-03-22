@@ -34,7 +34,7 @@ check "mysql CLI" mysql --version
 check "psql CLI" psql --version
 check "sqlcmd CLI" which sqlcmd
 check "bcp CLI" which bcp
-check "dbpatch binary" dbpatch --version
+check "dbpatch binary" which dbpatch
 
 echo ""
 echo "=== MySQL Connectivity ==="
