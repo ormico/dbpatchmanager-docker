@@ -13,29 +13,22 @@ jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
-      semver: ${{ steps.gitversion.outputs.semVer }}
-      major: ${{ steps.gitversion.outputs.major }}
-      minor: ${{ steps.gitversion.outputs.minor }}
+      semver: ${{ steps.parse.outputs.semver }}
+      major: ${{ steps.parse.outputs.major }}
+      minor: ${{ steps.parse.outputs.minor }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v3.2.0
-        with:
-          versionSpec: '6.x'
-
-      - name: Calculate version
-        id: gitversion
-        uses: gittools/actions/gitversion/execute@v3.2.0
-
-      - name: Verify tag is on main
-        if: github.ref_type == 'tag'
+      - name: Parse version from tag
+        id: parse
         run: |
-          git branch --contains "${{ github.sha }}" | grep -q 'main' \
-            || (echo "ERROR: Tag is not on main branch" && exit 1)
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          MAJOR="${SEMVER%%.*}"
+          MINOR="${SEMVER#*.}"
+          MINOR="${MINOR%%.*}"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+          echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
+          echo "Version: $SEMVER (major=$MAJOR, minor=$MINOR)"
 
   build-and-push:
     needs: version
