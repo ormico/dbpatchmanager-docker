@@ -2,7 +2,12 @@ name: Require Linked Issue
 
 on:
   pull_request:
-    types: [opened, edited, reopened]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
 
 jobs:
   check-linked-issue:
@@ -25,7 +30,13 @@ jobs:
             -f owner="${{ github.repository_owner }}" \
             -f repo="${{ github.event.repository.name }}" \
             -F number=${{ github.event.pull_request.number }} \
-            --jq '.data.repository.pullRequest.closingIssuesReferences.totalCount')
+            --jq '.data.repository.pullRequest.closingIssuesReferences.totalCount') \
+            || { echo "::error::GitHub API query failed"; exit 1; }
+
+          if ! [ "$LINKED" -eq "$LINKED" ] 2>/dev/null; then
+            echo "::error::Unexpected API response: '$LINKED'"
+            exit 1
+          fi
 
           if [ "$LINKED" -eq 0 ]; then
             echo "::error::This PR has no linked issues. Add 'Closes #N' to the PR description."
