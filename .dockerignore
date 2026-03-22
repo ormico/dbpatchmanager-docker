@@ -1,0 +1,11 @@
+.git
+.github
+.local
+.claude
+docs
+test
+LICENSE
+README.md
+CHANGELOG.md
+GitVersion.yml
+*.md
