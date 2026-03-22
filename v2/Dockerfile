@@ -31,10 +31,12 @@ RUN curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/packages-micro
     && dpkg -i packages-microsoft-prod.deb \
     && rm packages-microsoft-prod.deb
 
-# --- .NET 6.0 runtime ---
-# dbpatch v2 targets .NET 5.0 (EOL) — runs on .NET 6.0 via forward roll
+# --- .NET 8.0 runtime ---
+# dbpatch v2 targets .NET 5.0 (EOL). .NET 6.0 is also EOL and removed from
+# Microsoft's Ubuntu 24.04 repo. .NET 8.0 works with LatestMajor roll-forward.
+ENV DOTNET_ROLL_FORWARD=LatestMajor
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    dotnet-runtime-6.0 \
+    dotnet-runtime-8.0 \
     && rm -rf /var/lib/apt/lists/*
 
 # --- PowerShell 7+ ---
