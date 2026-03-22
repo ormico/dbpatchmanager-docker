@@ -42,17 +42,17 @@ echo "=== MySQL Connectivity ==="
 if [ -n "${MYSQL_HOST:-}" ]; then
     MYSQL_PORT="${MYSQL_PORT:-3306}"
     MYSQL_USER="${MYSQL_USER:-root}"
-    MYSQL_PWD="${MYSQL_PWD:-root}"
+    export MYSQL_PWD="${MYSQL_PWD:-root}"
     MYSQL_DB="${MYSQL_DB:-testdb}"
 
-    check "MySQL TCP connection" mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" -e "SELECT 1;"
+    check "MySQL TCP connection" mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -e "SELECT 1;"
 
     # Create table, insert, select
-    mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" <<-SQL
+    mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DB" <<-SQL
         CREATE TABLE IF NOT EXISTS smoke_test (id INT PRIMARY KEY, name VARCHAR(50));
         INSERT INTO smoke_test (id, name) VALUES (1, 'smoke') ON DUPLICATE KEY UPDATE name='smoke';
 SQL
-    RESULT=$(mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" -N -e "SELECT name FROM smoke_test WHERE id=1;")
+    RESULT=$(mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DB" -N -e "SELECT name FROM smoke_test WHERE id=1;")
     if [ "$RESULT" = "smoke" ]; then
         echo "PASS: MySQL insert and select"
         PASS=$((PASS + 1))
@@ -62,7 +62,7 @@ SQL
     fi
 
     # Cleanup
-    mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PWD" "$MYSQL_DB" -e "DROP TABLE IF EXISTS smoke_test;"
+    mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DB" -e "DROP TABLE IF EXISTS smoke_test;"
 else
     echo "SKIP: MySQL connectivity (MYSQL_HOST not set)"
 fi
