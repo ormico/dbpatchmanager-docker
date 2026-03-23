@@ -13,10 +13,6 @@ on:
         type: boolean
         default: true
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   build-test-push:
     runs-on: ubuntu-latest

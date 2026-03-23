@@ -89,14 +89,18 @@ jobs:
             API_BASE="/users/${OWNER}"
           fi
 
-          # List rebuild-tagged versions ({semVer}-YYYYMMDDHHmm), sorted newest first, skip KEEP
+          # Collect all pages first, then sort/slice globally to avoid per-page skew
           gh api --paginate "${API_BASE}/packages/container/${PACKAGE}/versions" \
-            --jq '
-              [.[] | select(
-                .metadata.container.tags | length > 0
-              ) | select(
-                .metadata.container.tags | any(test("^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]{12}$"))
-              )] | sort_by(.created_at) | reverse | .['$KEEP':][] | .id
+          | jq -r -s --argjson keep "$KEEP" '
+              add
+              | map(
+                  select(.metadata.container.tags | length > 0)
+                  | select(.metadata.container.tags | any(test("^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]{12}$")))
+                )
+              | sort_by(.created_at)
+              | reverse
+              | .[$keep:]
+              | .[].id
             ' \
           | while read -r id; do
               echo "Deleting version $id"
