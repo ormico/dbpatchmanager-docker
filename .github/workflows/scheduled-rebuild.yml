@@ -10,50 +10,99 @@ permissions:
   packages: write
 
 jobs:
-  rebuild:
+  version:
+    name: Calculate Version
     runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: testdb
-          MYSQL_USER: dbpatch
-          MYSQL_PASSWORD: dbpatch123
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    outputs:
+      semVer: ${{ steps.gitversion.outputs.semVer }}
+      major: ${{ steps.gitversion.outputs.major }}
+      minor: ${{ steps.gitversion.outputs.minor }}
+      timestamp: ${{ steps.timestamp.outputs.value }}
 
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: Build image
-        run: docker build -f v2/Dockerfile -t ghcr.io/ormico/dbpatchmanager-ci-v2:latest .
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.x'
 
-      - name: Run smoke tests
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4
+        with:
+          useConfigFile: true
+          configFilePath: GitVersion.yml
+
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "value=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+
+      - name: Display Version
         run: |
-          docker run --rm \
-            --network host \
-            -e MYSQL_HOST=127.0.0.1 \
-            -e MYSQL_PORT=3306 \
-            -e MYSQL_USER=dbpatch \
-            -e MYSQL_PWD=dbpatch123 \
-            -e MYSQL_DB=testdb \
-            -v "${{ github.workspace }}/test:/workspace/test" \
-            ghcr.io/ormico/dbpatchmanager-ci-v2:latest \
-            /workspace/test/smoke-test.sh
+          echo "SemVer: ${{ steps.gitversion.outputs.semVer }}"
+          echo "Timestamp: ${{ steps.timestamp.outputs.value }}"
 
-      - name: Push to GHCR
-        run: docker push ghcr.io/ormico/dbpatchmanager-ci-v2:latest
+  # Rebuilds push to the same floating tags as releases ({semVer}, {major}.{minor},
+  # {major}, latest). This is intentional — the binary changed (updated base image
+  # and dependencies) so floating tags should point to the freshest build.
+  # The unique timestamp tag ({semVer}-YYYYMMDDHHmm) preserves an immutable
+  # reference to each rebuild for traceability.
+  build-and-push:
+    needs: version
+    uses: ./.github/workflows/docker-build-push.yml
+    secrets: inherit
+    with:
+      tags: |
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }}-${{ needs.version.outputs.timestamp }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:latest
+
+  # Prune old rebuild images to control GHCR storage costs.
+  # Only deletes versions identified by a timestamp tag ({semVer}-YYYYMMDDHHmm).
+  # When a version is deleted, ALL of its tags are removed — but that's safe because
+  # the latest rebuild has already overwritten the floating tags (semVer, major.minor, etc.).
+  prune:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Prune old rebuild images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACKAGE="dbpatchmanager-ci-v2"
+          OWNER="${{ github.repository_owner }}"
+          KEEP=5
+
+          # Determine API path (org vs user)
+          if gh api "/orgs/${OWNER}" &>/dev/null; then
+            API_BASE="/orgs/${OWNER}"
+          else
+            API_BASE="/users/${OWNER}"
+          fi
+
+          # Collect all pages first, then sort/slice globally to avoid per-page skew
+          gh api --paginate "${API_BASE}/packages/container/${PACKAGE}/versions" \
+          | jq -r -s --argjson keep "$KEEP" '
+              add
+              | map(
+                  select(.metadata.container.tags | length > 0)
+                  | select(.metadata.container.tags | any(test("^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]{12}$")))
+                )
+              | sort_by(.created_at)
+              | reverse
+              | .[$keep:]
+              | .[].id
+            ' \
+          | while read -r id; do
+              echo "Deleting version $id"
+              gh api --method DELETE "${API_BASE}/packages/container/${PACKAGE}/versions/${id}" || true
+            done

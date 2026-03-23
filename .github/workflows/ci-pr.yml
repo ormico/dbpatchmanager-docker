@@ -4,41 +4,12 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: testdb
-          MYSQL_USER: dbpatch
-          MYSQL_PASSWORD: dbpatch123
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Build v2 image
-        run: docker build -f v2/Dockerfile -t dbpatchmanager-ci-v2:pr-${{ github.sha }} .
-
-      - name: Run smoke tests
-        run: |
-          docker run --rm \
-            --network host \
-            -e MYSQL_HOST=127.0.0.1 \
-            -e MYSQL_PORT=3306 \
-            -e MYSQL_USER=dbpatch \
-            -e MYSQL_PWD=dbpatch123 \
-            -e MYSQL_DB=testdb \
-            -v "${{ github.workspace }}/test:/workspace/test" \
-            dbpatchmanager-ci-v2:pr-${{ github.sha }} \
-            /workspace/test/smoke-test.sh
+    uses: ./.github/workflows/docker-build-push.yml
+    with:
+      tags: dbpatchmanager-ci-v2:pr-${{ github.sha }}
+      push: false

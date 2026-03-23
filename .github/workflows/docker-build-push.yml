@@ -1,0 +1,74 @@
+name: Docker Build, Test & Push
+
+on:
+  workflow_call:
+    inputs:
+      tags:
+        description: 'Newline-separated list of full image tags (first tag used for smoke tests)'
+        required: true
+        type: string
+      push:
+        description: 'Push images to GHCR after build and test (default: true)'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+          MYSQL_USER: dbpatch
+          MYSQL_PASSWORD: dbpatch123
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        if: inputs.push
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          TAG_FLAGS=""
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && TAG_FLAGS="$TAG_FLAGS -t $tag"
+          done <<< "${{ inputs.tags }}"
+          docker build -f v2/Dockerfile $TAG_FLAGS .
+
+      - name: Run smoke tests
+        run: |
+          TEST_IMAGE=$(echo "${{ inputs.tags }}" | head -n1)
+          docker run --rm \
+            --network host \
+            -e MYSQL_HOST=127.0.0.1 \
+            -e MYSQL_PORT=3306 \
+            -e MYSQL_USER=dbpatch \
+            -e MYSQL_PWD=dbpatch123 \
+            -e MYSQL_DB=testdb \
+            -v "${{ github.workspace }}/test:/workspace/test" \
+            "$TEST_IMAGE" \
+            /workspace/test/smoke-test.sh
+
+      - name: Push to GHCR
+        if: inputs.push
+        run: |
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && docker push "$tag"
+          done <<< "${{ inputs.tags }}"
