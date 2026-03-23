@@ -70,5 +70,5 @@ jobs:
         if: inputs.push
         run: |
           while IFS= read -r tag; do
-            [ -n "$tag" ] && docker push "$tag"
+            if [ -n "$tag" ]; then docker push "$tag"; fi
           done <<< "${{ inputs.tags }}"
