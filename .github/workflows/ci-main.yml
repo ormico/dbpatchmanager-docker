@@ -61,60 +61,14 @@ jobs:
 
   build-and-push:
     needs: version
-    runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: testdb
-          MYSQL_USER: dbpatch
-          MYSQL_PASSWORD: dbpatch123
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build image
-        run: |
-          docker build -f v2/Dockerfile \
-            -t ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }} \
-            -t ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }} \
-            -t ghcr.io/ormico/dbpatchmanager-ci-v2:latest \
-            .
-
-      - name: Run smoke tests
-        run: |
-          docker run --rm \
-            --network host \
-            -e MYSQL_HOST=127.0.0.1 \
-            -e MYSQL_PORT=3306 \
-            -e MYSQL_USER=dbpatch \
-            -e MYSQL_PWD=dbpatch123 \
-            -e MYSQL_DB=testdb \
-            -v "${{ github.workspace }}/test:/workspace/test" \
-            ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }} \
-            /workspace/test/smoke-test.sh
-
-      - name: Push to GHCR
-        run: |
-          docker push ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }}
-          docker push ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
-          docker push ghcr.io/ormico/dbpatchmanager-ci-v2:latest
+    uses: ./.github/workflows/docker-build-push.yml
+    secrets: inherit
+    with:
+      tags: |
+        ghcr.io/ormico/dbpatchmanager-ci-v2:v${{ needs.version.outputs.semVer }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:v${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:v${{ needs.version.outputs.major }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:latest
 
   release:
     needs: [version, build-and-push]
