@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Install GitVersion
         uses: gittools/actions/gitversion/setup@v4
@@ -46,18 +47,27 @@ jobs:
           echo "SemVer: ${{ steps.gitversion.outputs.semVer }}"
           echo "Timestamp: ${{ steps.timestamp.outputs.value }}"
 
+  # Rebuilds push to the same floating tags as releases ({semVer}, {major}.{minor},
+  # {major}, latest). This is intentional — the binary changed (updated base image
+  # and dependencies) so floating tags should point to the freshest build.
+  # The unique timestamp tag ({semVer}-YYYYMMDDHHmm) preserves an immutable
+  # reference to each rebuild for traceability.
   build-and-push:
     needs: version
     uses: ./.github/workflows/docker-build-push.yml
     secrets: inherit
     with:
       tags: |
-        ghcr.io/ormico/dbpatchmanager-ci-v2:v${{ needs.version.outputs.semVer }}-${{ needs.version.outputs.timestamp }}
-        ghcr.io/ormico/dbpatchmanager-ci-v2:v${{ needs.version.outputs.semVer }}
-        ghcr.io/ormico/dbpatchmanager-ci-v2:v${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
-        ghcr.io/ormico/dbpatchmanager-ci-v2:v${{ needs.version.outputs.major }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }}-${{ needs.version.outputs.timestamp }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.semVer }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}
+        ghcr.io/ormico/dbpatchmanager-ci-v2:${{ needs.version.outputs.major }}
         ghcr.io/ormico/dbpatchmanager-ci-v2:latest
 
+  # Prune old rebuild images to control GHCR storage costs.
+  # Only deletes versions identified by a timestamp tag ({semVer}-YYYYMMDDHHmm).
+  # When a version is deleted, ALL of its tags are removed — but that's safe because
+  # the latest rebuild has already overwritten the floating tags (semVer, major.minor, etc.).
   prune:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -79,13 +89,13 @@ jobs:
             API_BASE="/users/${OWNER}"
           fi
 
-          # List rebuild-tagged versions (v*-YYYYMMDDHHmm), sorted newest first, skip KEEP
+          # List rebuild-tagged versions ({semVer}-YYYYMMDDHHmm), sorted newest first, skip KEEP
           gh api --paginate "${API_BASE}/packages/container/${PACKAGE}/versions" \
             --jq '
               [.[] | select(
                 .metadata.container.tags | length > 0
               ) | select(
-                .metadata.container.tags | any(test("^v[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]{12}$"))
+                .metadata.container.tags | any(test("^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]{12}$"))
               )] | sort_by(.created_at) | reverse | .['$KEEP':][] | .id
             ' \
           | while read -r id; do
